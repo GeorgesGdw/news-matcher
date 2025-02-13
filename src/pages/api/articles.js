@@ -1,42 +1,39 @@
 import axios from 'axios';
 
-// Cette fonction nettoie et normalise les articles
-const normalizeArticle = (article, index) => {
-  return {
-    id: `${index}-${Date.now()}`,
-    title: article.title || 'Sans titre',
-    source: article.source?.name || 'Source inconnue',
-    summary: article.description || article.content || 'Pas de description disponible',
-    url: article.url,
-    image: article.urlToImage || '/placeholder/article.jpg',
-    publishedAt: article.publishedAt
-  };
-};
-
 export default async function handler(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ message: 'Method not allowed' });
+  }
+
   try {
-    const response = await axios.get('https://newsapi.org/v2/everything', {
-      params: {
-        q: 'technology OR economics OR politics',
-        language: 'fr',
-        sortBy: 'publishedAt',
-        pageSize: 20,
-        sources: 'le-monde,les-echos,liberation', // Sources françaises de qualité
-        apiKey: process.env.NEWS_API_KEY,
-      },
+    // Utilisation de l'API Brave pour obtenir des articles de qualité
+    const response = await axios.get('https://api.search.brave.com/res/v1/news/search', {
       headers: {
         'Accept': 'application/json',
+        'Accept-Encoding': 'gzip',
+        'X-Subscription-Token': process.env.BRAVE_API_KEY
       },
+      params: {
+        q: 'site:economist.com',
+        count: 10,
+        freshness: 'month'
+      }
     });
 
-    const articles = response.data.articles.map(normalizeArticle);
-    
+    // Transformer les résultats en format adapté à notre application
+    const articles = response.data.results.map((article, index) => ({
+      id: index + 1,
+      title: article.title,
+      source: 'The Economist',
+      summary: article.description,
+      url: article.url,
+      image: article.image?.url || '/placeholder/article.jpg',
+      date: article.published_time
+    }));
+
     res.status(200).json(articles);
   } catch (error) {
-    console.error('Erreur lors de la récupération des articles:', error);
-    res.status(500).json({ 
-      error: 'Erreur lors de la récupération des articles',
-      message: error.message 
-    });
+    console.error('Error fetching articles:', error);
+    res.status(500).json({ message: 'Error fetching articles' });
   }
 }
